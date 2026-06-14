@@ -1,0 +1,63 @@
+name: Update portfolio activity
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  notify:
+    name: Notify portfolio
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Send the latest commit to the portfolio
+        env:
+          API_URL: ${{ vars.PORTFOLIO_API_URL }}
+          PROJECT_SLUG: ${{ vars.PORTFOLIO_PROJECT_SLUG }}
+          UPDATE_SECRET: ${{ secrets.PORTFOLIO_UPDATES_SECRET }}
+          REPOSITORY_URL: https://github.com/${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_URL: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          : "${API_URL:?Missing GitHub variable PORTFOLIO_API_URL}"
+          : "${PROJECT_SLUG:?Missing GitHub variable PORTFOLIO_PROJECT_SLUG}"
+          : "${UPDATE_SECRET:?Missing GitHub secret PORTFOLIO_UPDATES_SECRET}"
+
+          COMMIT_MESSAGE="$(git log -1 --format=%B "$COMMIT_SHA")"
+          COMMITTED_AT="$(git log -1 --format=%cI "$COMMIT_SHA")"
+          AUTHOR_NAME="$(git log -1 --format=%an "$COMMIT_SHA")"
+
+          jq -n \
+            --arg projectSlug "$PROJECT_SLUG" \
+            --arg repositoryUrl "$REPOSITORY_URL" \
+            --arg commitSha "$COMMIT_SHA" \
+            --arg commitUrl "$COMMIT_URL" \
+            --arg commitMessage "$COMMIT_MESSAGE" \
+            --arg committedAt "$COMMITTED_AT" \
+            --arg authorName "$AUTHOR_NAME" \
+            '{
+              projectSlug: $projectSlug,
+              repositoryUrl: $repositoryUrl,
+              commitSha: $commitSha,
+              commitUrl: $commitUrl,
+              commitMessage: $commitMessage,
+              committedAt: $committedAt,
+              authorName: $authorName
+            }' |
+          curl --fail-with-body \
+            --request POST \
+            --header "Authorization: Bearer $UPDATE_SECRET" \
+            --header "Content-Type: application/json" \
+            --data-binary @- \
+            "${API_URL%/}/api/integrations/github/project-updates"
