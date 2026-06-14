@@ -35,6 +35,10 @@ button {
   min-height: 100vh;
 }
 
+.content-shell {
+  min-width: 0;
+}
+
 .sidebar {
   position: sticky;
   top: 0;
@@ -111,6 +115,22 @@ button {
   min-width: 0;
   width: min(1480px, 100%);
   padding: 28px;
+}
+
+.app-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 28px 0;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .view-head {
@@ -279,6 +299,83 @@ h2 {
   min-width: 0;
 }
 
+.profile-menu-shell {
+  position: relative;
+}
+
+.profile-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  min-width: 220px;
+  padding: 0 14px;
+  border: 1px solid #d7dce7;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #172033;
+}
+
+.profile-trigger-copy {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.profile-trigger-copy strong {
+  font-size: 0.92rem;
+}
+
+.profile-trigger-copy span {
+  color: #667085;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.profile-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: 280px;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid #dbe2ec;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 16px 40px rgba(16, 24, 40, 0.14);
+}
+
+.profile-menu-item {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #172033;
+  text-align: left;
+}
+
+.profile-menu-item:hover,
+.profile-menu-item.active {
+  background: #eef4ff;
+}
+
+.profile-menu-item span {
+  color: #667085;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.profile-menu-item.manage {
+  border-top: 1px solid #edf1f7;
+  margin-top: 4px;
+  padding-top: 12px;
+}
+
 .panel-title {
   display: flex;
   align-items: center;
@@ -308,6 +405,28 @@ h2 {
 
 .link-button.danger {
   color: #b42318;
+}
+
+.checkbox-list {
+  display: grid;
+  gap: 10px;
+}
+
+.checkbox-list.inline {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #475467;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.checkbox-row input {
+  margin: 0;
 }
 
 .legend-list {
@@ -487,6 +606,98 @@ dd {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 16px;
+}
+
+.profile-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
+  gap: 16px;
+}
+
+.profile-card-list {
+  display: grid;
+  gap: 12px;
+}
+
+.profile-card {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #dde4ef;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #172033;
+  text-align: left;
+}
+
+.profile-card.active,
+.profile-card:hover {
+  border-color: #93c5fd;
+  background: #f8fbff;
+}
+
+.profile-card strong {
+  display: block;
+  font-size: 0.96rem;
+}
+
+.profile-card span,
+.profile-card p {
+  color: #667085;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.profile-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 14px 0 18px;
+}
+
+.profile-actions,
+.profile-storage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.profile-storage-panel {
+  margin-top: 16px;
+}
+
+.profile-storage-help {
+  margin-top: 12px;
+  color: #667085;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.segmented-control {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #ccd5e2;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.segmented-control button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 12px;
+  background: transparent;
+  color: #475467;
+  font-weight: 700;
+}
+
+.segmented-control button.active {
+  background: #ffffff;
+  color: #172033;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
 }
 
 .form-grid.three {
@@ -724,6 +935,11 @@ dd {
     padding: 18px;
   }
 
+  .app-toolbar {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
   .view-head {
     align-items: flex-start;
     flex-direction: column;
@@ -733,6 +949,7 @@ dd {
   .account-grid,
   .dashboard-grid,
   .projection-grid,
+  .profile-layout,
   .entry-summary,
   .form-grid,
   .form-grid.three,
@@ -749,7 +966,8 @@ dd {
 
   .simulation-actions,
   .event-head,
-  .budget-row-actions {
+  .budget-row-actions,
+  .toolbar-group {
     flex-direction: column;
     align-items: stretch;
   }

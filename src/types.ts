@@ -40,6 +40,13 @@ export type BudgetPlan = {
   targetSavings?: number;
 };
 
+export type ProfileKind = "personal" | "shared";
+
+export type ProfilePreferences = {
+  hideSavings: boolean;
+  hideAccounts: boolean;
+};
+
 export type SimulationEvent =
   | {
       id: string;
@@ -81,4 +88,14 @@ export type SavingsModel = {
   salary: SalaryYear[];
   budget: BudgetPlan;
   simulationEvents: SimulationEvent[];
+};
+
+export type AppProfile = {
+  id: string;
+  name: string;
+  kind: ProfileKind;
+  preferences: ProfilePreferences;
+  model: SavingsModel;
+  memberIds?: string[];
+  sharedContributionCategoryId?: string;
 };

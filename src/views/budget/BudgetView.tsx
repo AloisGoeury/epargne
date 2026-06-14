@@ -13,15 +13,19 @@ import {
 } from "../../calculations";
 import type { BudgetTreeNode } from "../../calculations";
 import { useI18n } from "../../i18n";
-import { removeBudgetBranch, updateBudgetCategory } from "../../services/modelService";
+import { removeBudgetBranchFromPlan, updateBudgetPlanCategory } from "../../services/modelService";
 import { DecimalInput } from "../../shared/components/DecimalInput";
 import { KpiCard } from "../../shared/components/KpiCard";
 import { ViewHeader } from "../../shared/components/ViewHeader";
-import type { SavingsModel } from "../../types";
+import type { BudgetPlan, SavingsModel } from "../../types";
 
 type BudgetViewProps = {
   model: SavingsModel;
-  setModel: (model: SavingsModel) => void;
+  budget: BudgetPlan;
+  setBudget: (budget: BudgetPlan) => void;
+  onSaveBudget: () => void;
+  budgetDirty: boolean;
+  incomeLocked?: boolean;
 };
 
 function BudgetSankeyNode({
@@ -49,26 +53,20 @@ function BudgetSankeyNode({
 }
 
 function BudgetCategoryEditor({
-  model,
-  setModel,
+  budget,
+  setBudget,
   category,
 }: {
-  model: SavingsModel;
-  setModel: (model: SavingsModel) => void;
+  budget: BudgetPlan;
+  setBudget: (budget: BudgetPlan) => void;
   category: BudgetTreeNode;
 }) {
   const { t, formatCurrency } = useI18n();
 
   const addChild = () => {
-    setModel({
-      ...model,
-      budget: {
-        ...model.budget,
-        categories: [
-          ...model.budget.categories,
-          { id: `budget-${Date.now()}`, label: t("budget.newSubCategory"), amount: 0, parentId: category.id },
-        ],
-      },
+    setBudget({
+      ...budget,
+      categories: [...budget.categories, { id: `budget-${Date.now()}`, label: t("budget.newSubCategory"), amount: 0, parentId: category.id }],
     });
   };
 
@@ -77,11 +75,11 @@ function BudgetCategoryEditor({
       <div className="budget-row" style={{ paddingLeft: `${category.depth * 18}px` }}>
         <label className="field">
           <span>{category.depth === 0 ? t("budget.category") : t("budget.subCategory")}</span>
-          <input value={category.label} onChange={(event) => setModel(updateBudgetCategory(model, category.id, (item) => ({ ...item, label: event.target.value })))} />
+          <input value={category.label} onChange={(event) => setBudget(updateBudgetPlanCategory(budget, category.id, (item) => ({ ...item, label: event.target.value })))} />
         </label>
         <label className="field">
           <span>{t("budget.directAmount")}</span>
-          <DecimalInput value={category.amount} onCommit={(nextValue) => setModel(updateBudgetCategory(model, category.id, (item) => ({ ...item, amount: nextValue })))} />
+          <DecimalInput value={category.amount} onCommit={(nextValue) => setBudget(updateBudgetPlanCategory(budget, category.id, (item) => ({ ...item, amount: nextValue })))} />
           {category.children.length > 0 ? <small className="field-help">{t("budget.branchTotal", { amount: formatCurrency(category.total) })}</small> : null}
         </label>
         <div className="budget-row-actions">
@@ -89,26 +87,27 @@ function BudgetCategoryEditor({
             <Plus size={16} aria-hidden="true" />
             <span>{t("actions.addSubCategory")}</span>
           </button>
-          <button className="link-button danger" onClick={() => setModel(removeBudgetBranch(model, category.id))}>
+          <button className="link-button danger" onClick={() => setBudget(removeBudgetBranchFromPlan(budget, category.id))}>
             {t("actions.delete")}
           </button>
         </div>
       </div>
       {category.children.map((child) => (
-        <BudgetCategoryEditor key={child.id} model={model} setModel={setModel} category={child} />
+        <BudgetCategoryEditor key={child.id} budget={budget} setBudget={setBudget} category={child} />
       ))}
     </>
   );
 }
 
-export function BudgetView({ model, setModel }: BudgetViewProps) {
+export function BudgetView({ model, budget, setBudget, onSaveBudget, budgetDirty, incomeLocked = false }: BudgetViewProps) {
   const { t, formatCurrency, formatCurrencyPrecise, formatPercent } = useI18n();
-  const income = budgetIncome(model);
-  const expenses = budgetExpenses(model.budget);
-  const available = budgetAvailableForSavings(model);
-  const gap = budgetGapToTarget(model);
-  const categoryTree = budgetTree(model.budget);
-  const sankeyData = budgetSankeyData(model, {
+  const budgetModel = { ...model, budget };
+  const income = budgetIncome(budgetModel);
+  const expenses = budgetExpenses(budget);
+  const available = budgetAvailableForSavings(budgetModel);
+  const gap = budgetGapToTarget(budgetModel);
+  const categoryTree = budgetTree(budget);
+  const sankeyData = budgetSankeyData(budgetModel, {
     income: t("budget.sankeyIncome"),
     savings: t("budget.sankeySavings"),
     expenses: t("budget.sankeyExpenses"),
@@ -117,18 +116,23 @@ export function BudgetView({ model, setModel }: BudgetViewProps) {
   });
 
   const addCategory = () => {
-    setModel({
-      ...model,
-      budget: {
-        ...model.budget,
-        categories: [...model.budget.categories, { id: `budget-${Date.now()}`, label: t("budget.newCategory"), amount: 0 }],
-      },
+    setBudget({
+      ...budget,
+      categories: [...budget.categories, { id: `budget-${Date.now()}`, label: t("budget.newCategory"), amount: 0 }],
     });
   };
 
   return (
     <main className="view">
-      <ViewHeader eyebrow={t("budget.eyebrow")} title={t("budget.title")} />
+      <ViewHeader
+        eyebrow={t("budget.eyebrow")}
+        title={t("budget.title")}
+        actions={
+          <button className="action-button" onClick={onSaveBudget} disabled={!budgetDirty}>
+            <span>{t("budget.saveBudget")}</span>
+          </button>
+        }
+      />
 
       <div className="kpi-grid">
         <KpiCard label={t("budget.monthlyIncome")} value={formatCurrency(income)} icon={BriefcaseBusiness} tone="blue" />
@@ -143,30 +147,25 @@ export function BudgetView({ model, setModel }: BudgetViewProps) {
             <label className="field">
               <span>{t("budget.selectedMonthlyIncome")}</span>
               <DecimalInput
-                value={model.budget.monthlyIncomeOverride ?? averageMonthlySalary(model)}
+                value={budget.monthlyIncomeOverride ?? averageMonthlySalary(budgetModel)}
+                disabled={incomeLocked}
                 onCommit={(nextValue) =>
-                  setModel({
-                    ...model,
-                    budget: {
-                      ...model.budget,
-                      monthlyIncomeOverride: nextValue,
-                    },
+                  setBudget({
+                    ...budget,
+                    monthlyIncomeOverride: nextValue,
                   })
                 }
               />
-              <small className="field-help">{t("budget.incomeHelp")}</small>
+              <small className="field-help">{incomeLocked ? t("budget.incomeSharedHelp") : t("budget.incomeHelp")}</small>
             </label>
             <label className="field">
               <span>{t("budget.monthlySavingsTarget")}</span>
               <DecimalInput
-                value={model.budget.targetSavings ?? averageMonthlySavings(model)}
+                value={budget.targetSavings ?? averageMonthlySavings(budgetModel)}
                 onCommit={(nextValue) =>
-                  setModel({
-                    ...model,
-                    budget: {
-                      ...model.budget,
-                      targetSavings: nextValue,
-                    },
+                  setBudget({
+                    ...budget,
+                    targetSavings: nextValue,
                   })
                 }
               />
@@ -182,11 +181,11 @@ export function BudgetView({ model, setModel }: BudgetViewProps) {
           <div className="mini-table">
             <div>
               <span>{t("budget.observedAverageDeposit")}</span>
-              <strong>{formatCurrency(averageMonthlySavings(model))}</strong>
+              <strong>{formatCurrency(averageMonthlySavings(budgetModel))}</strong>
             </div>
             <div>
               <span>{t("budget.observedSavingsRate")}</span>
-              <strong>{formatPercent(currentYearSavingsRate(model))}</strong>
+              <strong>{formatPercent(currentYearSavingsRate(budgetModel))}</strong>
             </div>
             <div>
               <span>{t("budget.availableBudget")}</span>
@@ -226,7 +225,7 @@ export function BudgetView({ model, setModel }: BudgetViewProps) {
         </div>
         <div className="budget-list">
           {categoryTree.map((category) => (
-            <BudgetCategoryEditor key={category.id} model={model} setModel={setModel} category={category} />
+            <BudgetCategoryEditor key={category.id} budget={budget} setBudget={setBudget} category={category} />
           ))}
         </div>
       </section>

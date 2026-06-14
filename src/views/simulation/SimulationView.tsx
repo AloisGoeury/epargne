@@ -17,9 +17,10 @@ import type { SavingsModel, SimulationEvent } from "../../types";
 type SimulationViewProps = {
   model: SavingsModel;
   setModel: (model: SavingsModel) => void;
+  onSave?: () => void;
 };
 
-export function SimulationView({ model, setModel }: SimulationViewProps) {
+export function SimulationView({ model, setModel, onSave }: SimulationViewProps) {
   const { t, formatCurrency, formatCurrencyPrecise, formatMonth } = useI18n();
   const baseline = projectionSeries(model, averageMonthlySavings(model));
   const scenario = simulationProjectionSeries(model);
@@ -56,7 +57,17 @@ export function SimulationView({ model, setModel }: SimulationViewProps) {
 
   return (
     <main className="view">
-      <ViewHeader eyebrow={t("simulation.eyebrow")} title={t("simulation.title")} />
+      <ViewHeader
+        eyebrow={t("simulation.eyebrow")}
+        title={t("simulation.title")}
+        actions={
+          onSave ? (
+            <button className="action-button" onClick={onSave}>
+              <span>{t("simulation.saveScenario")}</span>
+            </button>
+          ) : undefined
+        }
+      />
 
       <div className="kpi-grid">
         <KpiCard label={t("simulation.projectedMonthlyBase")} value={formatCurrency(summary.annualBaseSavings / 12)} icon={Coins} tone="blue" />

@@ -1,6 +1,7 @@
-import type { Account, BudgetCategory, SavingsModel, SimulationEvent } from "../types";
+import type { Account, BudgetCategory, BudgetPlan, SavingsModel, SimulationEvent } from "../types";
 
 export const cloneModel = (model: SavingsModel): SavingsModel => JSON.parse(JSON.stringify(model));
+export const cloneBudget = (budget: BudgetPlan): BudgetPlan => JSON.parse(JSON.stringify(budget));
 
 export const updateAccount = (
   model: SavingsModel,
@@ -32,6 +33,15 @@ export const updateBudgetCategory = (
   },
 });
 
+export const updateBudgetPlanCategory = (
+  budget: BudgetPlan,
+  categoryId: string,
+  updater: (category: BudgetCategory) => BudgetCategory,
+): BudgetPlan => ({
+  ...budget,
+  categories: budget.categories.map((category) => (category.id === categoryId ? updater(category) : category)),
+});
+
 export const removeBudgetBranch = (model: SavingsModel, categoryId: string): SavingsModel => {
   const toDelete = new Set<string>([categoryId]);
   let changed = true;
@@ -52,5 +62,25 @@ export const removeBudgetBranch = (model: SavingsModel, categoryId: string): Sav
       ...model.budget,
       categories: model.budget.categories.filter((category) => !toDelete.has(category.id)),
     },
+  };
+};
+
+export const removeBudgetBranchFromPlan = (budget: BudgetPlan, categoryId: string): BudgetPlan => {
+  const toDelete = new Set<string>([categoryId]);
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+    budget.categories.forEach((category) => {
+      if (category.parentId && toDelete.has(category.parentId) && !toDelete.has(category.id)) {
+        toDelete.add(category.id);
+        changed = true;
+      }
+    });
+  }
+
+  return {
+    ...budget,
+    categories: budget.categories.filter((category) => !toDelete.has(category.id)),
   };
 };

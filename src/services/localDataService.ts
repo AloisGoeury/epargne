@@ -11,3 +11,19 @@ export const loadLocalAppDocument = async (): Promise<PersistedAppDocument | nul
     return null;
   }
 };
+
+export const saveLocalAppDocument = async (document: PersistedAppDocument): Promise<boolean> => {
+  try {
+    const response = await fetch(localDocumentPath, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(document),
+    });
+
+    return response.ok;
+  } catch {
+    return false;
+  }
+};

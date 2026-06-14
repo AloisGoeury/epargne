@@ -6,9 +6,10 @@ type DecimalInputProps = {
   onCommit: (nextValue: number) => void;
   inputMode?: "decimal" | "numeric";
   placeholder?: string;
+  disabled?: boolean;
 };
 
-export function DecimalInput({ value, onCommit, inputMode = "decimal", placeholder }: DecimalInputProps) {
+export function DecimalInput({ value, onCommit, inputMode = "decimal", placeholder, disabled = false }: DecimalInputProps) {
   const [draft, setDraft] = useState(decimalInputValue(value));
 
   useEffect(() => {
@@ -24,6 +25,7 @@ export function DecimalInput({ value, onCommit, inputMode = "decimal", placehold
       value={draft}
       inputMode={inputMode}
       placeholder={placeholder}
+      disabled={disabled}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={commit}
       onKeyDown={(event) => {

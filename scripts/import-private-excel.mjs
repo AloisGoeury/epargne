@@ -2,8 +2,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import ExcelJS from "exceljs";
 
-const workbookPath = path.resolve(process.cwd(), process.argv[2] ?? "Epargne_Finale.xlsx");
 const outputPath = path.resolve(process.cwd(), ".local/epargne-data.json");
+
+const args = process.argv.slice(2);
+const workbookArg = args.find((arg) => !arg.startsWith("--")) ?? "Epargne_Finale.xlsx";
+const profileArg = args.find((arg) => arg.startsWith("--profile="))?.slice("--profile=".length).trim() || null;
+const documentArg = args.find((arg) => arg.startsWith("--document="))?.slice("--document=".length).trim() || null;
+const workbookPath = path.resolve(process.cwd(), workbookArg);
+const documentPath = documentArg ? path.resolve(process.cwd(), documentArg) : outputPath;
 
 const emptyMonths = () => Array.from({ length: 12 }, () => 0);
 
@@ -58,6 +64,17 @@ const fallbackModel = {
     },
   ],
 };
+
+const clone = (value) => JSON.parse(JSON.stringify(value));
+
+const sharedContributionCategoryId = "shared-contribution";
+const sharedContributionCategoryLabelByLanguage = {
+  fr: "Compte commun",
+  en: "Shared account",
+};
+const sharedContributionAliases = ["Compte commun", "Shared account"].map((value) => value.toLowerCase());
+
+const makeId = () => globalThis.crypto?.randomUUID?.() ?? `profile-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const makeYears = (rows) => {
   const byYear = new Map(rows.map((row) => [row.year, row]));
@@ -244,10 +261,7 @@ const importWorkbook = (workbook, fallback) => {
   if (managed) return managed;
 
   const legacySheetNames = ["Livret Jeune", "Livret A", "Participation", "Assurance Vie"];
-  const accounts = legacySheetNames
-    .map((name) => workbook.getWorksheet(name))
-    .filter(Boolean)
-    .map(readLegacyAccount);
+  const accounts = legacySheetNames.map((name) => workbook.getWorksheet(name)).filter(Boolean).map(readLegacyAccount);
 
   const tradeSheet = workbook.getWorksheet("Trade Republique");
   if (tradeSheet) accounts.splice(2, 0, ...readLegacyTradeRepublic(tradeSheet));
@@ -284,16 +298,196 @@ const importWorkbook = (workbook, fallback) => {
   };
 };
 
+const findSharedContributionCategory = (budget) =>
+  budget.categories.find((category) => category.id === sharedContributionCategoryId || sharedContributionAliases.includes(category.label.trim().toLowerCase()));
+
+const ensureSharedContributionCategory = (budget, language) => {
+  if (findSharedContributionCategory(budget)) {
+    return clone(budget);
+  }
+
+  return {
+    ...clone(budget),
+    categories: [
+      ...budget.categories,
+      {
+        id: sharedContributionCategoryId,
+        label: sharedContributionCategoryLabelByLanguage[language] ?? sharedContributionCategoryLabelByLanguage.fr,
+        amount: 0,
+      },
+    ],
+  };
+};
+
+const createPersonalProfile = (name, model, language) => ({
+  id: makeId(),
+  name,
+  kind: "personal",
+  preferences: {
+    hideSavings: false,
+    hideAccounts: false,
+  },
+  sharedContributionCategoryId,
+  model: {
+    ...clone(model),
+    budget: ensureSharedContributionCategory(model.budget, language),
+  },
+});
+
+const createDocumentFromModel = (model, language = "fr") => {
+  const profile = createPersonalProfile(language === "en" ? "Me" : "Moi", model, language);
+  return {
+    version: 2,
+    language,
+    activeProfileId: profile.id,
+    profiles: [profile],
+  };
+};
+
+const isSavingsModel = (value) =>
+  typeof value === "object" && value !== null && Array.isArray(value.accounts) && Array.isArray(value.salary);
+
+const normalizeDocument = (raw) => {
+  if (raw && typeof raw === "object" && Array.isArray(raw.profiles)) {
+    const language = raw.language === "en" ? "en" : "fr";
+    const profiles = raw.profiles.map((profile) => {
+      if (profile.kind === "shared") {
+        return {
+          ...clone(profile),
+          preferences: {
+            hideSavings: true,
+            hideAccounts: true,
+            ...(profile.preferences ?? {}),
+          },
+          memberIds: [...(profile.memberIds ?? [])],
+        };
+      }
+
+      return {
+        ...clone(profile),
+        kind: "personal",
+        preferences: {
+          hideSavings: false,
+          hideAccounts: false,
+          ...(profile.preferences ?? {}),
+        },
+        sharedContributionCategoryId: findSharedContributionCategory(profile.model.budget)?.id || profile.sharedContributionCategoryId || sharedContributionCategoryId,
+        model: {
+          ...clone(profile.model),
+          budget: ensureSharedContributionCategory(profile.model.budget, language),
+        },
+      };
+    });
+
+    const activeProfileId = profiles.some((profile) => profile.id === raw.activeProfileId) ? raw.activeProfileId : profiles[0]?.id;
+    if (!activeProfileId) {
+      return createDocumentFromModel(fallbackModel, language);
+    }
+
+    return {
+      version: 2,
+      language,
+      activeProfileId,
+      profiles,
+    };
+  }
+
+  if (isSavingsModel(raw)) {
+    return createDocumentFromModel(raw, "fr");
+  }
+
+  if (raw && typeof raw === "object" && isSavingsModel(raw.model)) {
+    return createDocumentFromModel(raw.model, raw.language === "en" ? "en" : "fr");
+  }
+
+  return createDocumentFromModel(fallbackModel, "fr");
+};
+
+const readExistingDocument = async () => {
+  try {
+    const raw = JSON.parse(await fs.readFile(documentPath, "utf8"));
+    return normalizeDocument(raw);
+  } catch {
+    return null;
+  }
+};
+
+const resolveTargetProfile = (document) => {
+  const personalProfiles = document.profiles.filter((profile) => profile.kind === "personal");
+  if (personalProfiles.length === 0) {
+    return null;
+  }
+
+  if (profileArg) {
+    const normalized = profileArg.toLowerCase();
+    const explicit = personalProfiles.find((profile) => profile.id === profileArg || profile.name.toLowerCase() === normalized);
+    if (!explicit) {
+      throw new Error(`No personal profile matches "${profileArg}".`);
+    }
+    return explicit;
+  }
+
+  const active = personalProfiles.find((profile) => profile.id === document.activeProfileId);
+  return active ?? personalProfiles[0];
+};
+
+const mergeImportedModel = (currentModel, importedModel) => ({
+  ...clone(currentModel),
+  goal: importedModel.goal,
+  projectionTarget: importedModel.projectionTarget,
+  annualReturn: importedModel.annualReturn,
+  projectionYears: importedModel.projectionYears,
+  accounts: importedModel.accounts,
+  salary: importedModel.salary,
+});
+
 const workbook = new ExcelJS.Workbook();
 await workbook.xlsx.readFile(workbookPath);
 
-const model = importWorkbook(workbook, fallbackModel);
+const existingDocument = await readExistingDocument();
+const baseDocument = existingDocument ?? createDocumentFromModel(fallbackModel, "fr");
+const targetProfile = resolveTargetProfile(baseDocument) ?? createPersonalProfile(baseDocument.language === "en" ? "Imported" : "Importe", fallbackModel, baseDocument.language);
+const importedModel = importWorkbook(workbook, targetProfile.model ?? fallbackModel);
+
+let nextDocument;
+if (existingDocument) {
+  const hasTarget = baseDocument.profiles.some((profile) => profile.id === targetProfile.id);
+  nextDocument = {
+    ...baseDocument,
+    activeProfileId: baseDocument.activeProfileId,
+    profiles: hasTarget
+      ? baseDocument.profiles.map((profile) =>
+          profile.id === targetProfile.id
+            ? {
+                ...profile,
+                model: mergeImportedModel(profile.model, importedModel),
+              }
+            : profile,
+        )
+      : [
+          ...baseDocument.profiles,
+          {
+            ...targetProfile,
+            model: mergeImportedModel(targetProfile.model, importedModel),
+          },
+        ],
+  };
+} else {
+  const createdProfile = {
+    ...targetProfile,
+    model: mergeImportedModel(targetProfile.model, importedModel),
+  };
+  nextDocument = {
+    version: 2,
+    language: baseDocument.language,
+    activeProfileId: createdProfile.id,
+    profiles: [createdProfile],
+  };
+}
 
 await fs.mkdir(path.dirname(outputPath), { recursive: true });
-await fs.writeFile(
-  outputPath,
-  `${JSON.stringify({ version: 1, language: "fr", model }, null, 2)}\n`,
-  "utf8",
-);
+await fs.writeFile(outputPath, `${JSON.stringify(nextDocument, null, 2)}\n`, "utf8");
 
-console.log(`Wrote ${path.relative(process.cwd(), outputPath)} from ${path.relative(process.cwd(), workbookPath)}`);
+console.log(
+  `Wrote ${path.relative(process.cwd(), outputPath)} from ${path.relative(process.cwd(), workbookPath)} into profile "${targetProfile.name}" using ${path.relative(process.cwd(), documentPath)} as base`,
+);

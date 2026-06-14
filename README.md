@@ -33,6 +33,18 @@ Import your private Excel data:
 npm run import:excel
 ```
 
+Import into a specific personal profile:
+
+```bash
+npm run import:excel -- --profile="Moi"
+```
+
+Import while preserving the latest exported document as the merge base:
+
+```bash
+npm run import:excel -- --document="/Users/aloisgoeury/Downloads/epargne-data-4.json" --profile="Moi"
+```
+
 Start the app in dev mode:
 
 ```bash
@@ -56,5 +68,8 @@ npm run build
 ## Notes
 
 - If your Excel file changes, run `npm run import:excel` again
+- In dev mode, saving budget/simulation/profile changes now updates `.local/epargne-data.json` directly when possible
+- The importer now preserves your existing profiles, budgets, and shared setup, and only refreshes the imported financial data for one personal profile
+- By default the importer uses `.local/epargne-data.json` as its base; if your freshest data lives in an exported file from Downloads, pass it with `--document=...`
 - The private auto-load is for local dev only
 - Production builds use the sample data unless you add another private deployment flow
